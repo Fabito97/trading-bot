@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  trading-bot:
+    build:
+      context: .
+      dockerfile: bot/Dockerfile
+    container_name: mt5-trading-bot
+    
+    # Environment variables - load from .env file
+    env_file:
+      - bot/.env
+    
+    # Volumes for persistent data
+    volumes:
+      # Log files
+      - ./bot/logs:/app/bot/logs
+      # Database
+      - ./bot/data:/app/bot/data
+    
+    # Port mapping
+    ports:
+      - "8000:8000"  # API port
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Network configuration
+    networks:
+      - trading-network
+
+networks:
+  trading-network:
+    driver: bridge
+
+# Volume definitions for persistent storage
+volumes:
+  logs:
+    driver: local
+  data:
+    driver: local

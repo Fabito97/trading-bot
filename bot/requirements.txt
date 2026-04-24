@@ -1,0 +1,18 @@
+# Trading Bot Dependencies
+# Run: pip install -r requirements.txt
+
+# Core dependencies
+MetaTrader5>=5.0.45
+pandas>=2.0.0
+pandas-ta>=0.3.14b
+numpy>=1.24.0
+python-dotenv>=1.0.0
+
+# API server
+Flask>=2.3.0
+flask-cors>=4.0.0
+
+# Development dependencies (optional)
+pytest>=7.0.0
+black>=23.0.0
+flake8>=6.0.0
