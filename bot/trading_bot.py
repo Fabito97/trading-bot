@@ -5,7 +5,7 @@ Runs the main loop: connect, analyze, execute, monitor, repeat.
 
 import signal
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from config import mt5_config, monitoring_config, trading_config
@@ -24,7 +24,7 @@ class TradingBot:
 
     def __init__(self):
         self.is_running = False
-        self.last_status_log = datetime.utcnow()
+        self.last_status_log = datetime.now(timezone.utc)
         self.status_log_interval = timedelta(minutes=5)
         self.total_trades = 0
         self.total_pnl = 0.0
@@ -94,9 +94,12 @@ class TradingBot:
     def _main_loop(self) -> None:
         """Main trading loop"""
         logger.info("Entering main loop")
+        iteration_count = 0
 
         while self.is_running:
             try:
+                iteration_count += 1
+
                 # Health check
                 if not mt5_conn.is_ready():
                     logger.warning("MT5 connection lost, attempting reconnect")
@@ -112,18 +115,40 @@ class TradingBot:
                 )
 
                 if bars is None:
-                    logger.warning("Failed to get market data, waiting for next cycle")
+                    logger.warning("[DEBUG] Failed to get market data, waiting for next cycle", iteration=iteration_count)
                     time.sleep(trading_config.check_interval_seconds)
                     continue
+
+                # DEBUG: Log bar count and latest prices
+                logger.info(
+                    "[DEBUG] Market data fetched",
+                    iteration=iteration_count,
+                    bar_count=len(bars),
+                    latest_close=float(bars[-1][4]) if len(bars) > 0 else "N/A",
+                    oldest_close=float(bars[0][4]) if len(bars) > 0 else "N/A",
+                )
 
                 # Analyze with strategy
                 signal_result = strategy.analyze(bars)
 
-                # Execute if signal generated
+                # DEBUG: Log analysis result
                 if signal_result:
                     signal_type, indicator_values = signal_result
+                    logger.info(
+                        "[DEBUG] Signal generated",
+                        iteration=iteration_count,
+                        signal_type=signal_type,
+                        fast_ma=indicator_values.get("fast_ma"),
+                        slow_ma=indicator_values.get("slow_ma"),
+                        rsi=indicator_values.get("rsi"),
+                    )
                     executor.execute_signal(signal_type, indicator_values)
                     self.total_trades += 1
+                else:
+                    logger.info(
+                        "[DEBUG] No signal generated",
+                        iteration=iteration_count,
+                    )
 
                 # Manage open trades
                 executor.manage_open_trades()
@@ -138,12 +163,12 @@ class TradingBot:
                 logger.info("Keyboard interrupt received")
                 break
             except Exception as e:
-                logger.error("Error in main loop iteration", exception=str(e))
+                logger.error("Error in main loop iteration", exception=str(e), iteration=iteration_count)
                 time.sleep(trading_config.check_interval_seconds)
 
     def _log_status_if_due(self) -> None:
         """Log bot status periodically"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if now - self.last_status_log >= self.status_log_interval:
             account_info = mt5_conn.get_account_info()
             if account_info:

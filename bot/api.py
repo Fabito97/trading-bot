@@ -4,7 +4,7 @@ Provides endpoints for bot status, trades, logs, and signals.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -20,7 +20,7 @@ CORS(app)
 @app.route("/health", methods=["GET"])
 def health_check():
     """Health check endpoint"""
-    return jsonify({"status": "ok", "timestamp": datetime.utcnow().isoformat()})
+    return jsonify({"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()})
 
 
 @app.route("/api/status", methods=["GET"])
@@ -34,15 +34,15 @@ def get_status():
 
         # Get bot state
         bot_state = db.get_bot_state()
-        
+
         # Get open trades
         open_trades = db.get_open_trades()
-        
+
         # Get daily stats
         daily_stats = db.get_daily_stats()
 
         response = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "mt5_connected": mt5_conn.is_ready(),
             "account": {
                 "login": account_info["login"],
@@ -81,10 +81,10 @@ def get_trades():
     """Get trades (open and recent closed)"""
     try:
         limit = request.args.get("limit", default=50, type=int)
-        
+
         # Get open trades
         open_trades = db.get_open_trades()
-        
+
         # Get all trades limited
         conn = db._get_connection()
         cursor = conn.cursor()
@@ -101,7 +101,7 @@ def get_trades():
         trades = [dict(row) for row in rows]
 
         return jsonify({
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "open_count": len(open_trades),
             "trades": trades,
         })
@@ -120,7 +120,7 @@ def get_trade(ticket: int):
             return jsonify({"error": "Trade not found"}), 404
 
         return jsonify({
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "trade": trade,
         })
 
@@ -137,7 +137,7 @@ def get_signals():
         signals = db.get_signals(limit)
 
         return jsonify({
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "count": len(signals),
             "signals": signals,
         })
@@ -153,11 +153,11 @@ def get_logs():
     try:
         limit = request.args.get("limit", default=100, type=int)
         level = request.args.get("level")
-        
+
         logs = db.get_logs(limit=limit, level=level)
 
         return jsonify({
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "count": len(logs),
             "logs": logs,
         })
@@ -174,7 +174,7 @@ def get_daily_stats():
         stats = db.get_daily_stats()
 
         return jsonify({
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "stats": stats,
         })
 

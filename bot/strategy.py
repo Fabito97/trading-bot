@@ -47,7 +47,7 @@ class TradingStrategy:
             df = self._bars_to_dataframe(bars)
 
             if len(df) < self.slow_period:
-                logger.debug(f"Not enough bars to calculate indicators: {len(df)}")
+                logger.info(f"[DEBUG] Not enough bars to calculate indicators: {len(df)} < {self.slow_period}")
                 return None
 
             # Calculate indicators
@@ -62,6 +62,17 @@ class TradingStrategy:
             previous = df.iloc[-2]
             prev_fast_ma = previous["fast_ma"]
             prev_slow_ma = previous["slow_ma"]
+
+            # DEBUG: Log current indicator values
+            logger.info(
+                "[DEBUG] Current indicators",
+                close=float(close),
+                fast_ma=float(fast_ma),
+                slow_ma=float(slow_ma),
+                rsi=float(rsi),
+                prev_fast_ma=float(prev_fast_ma),
+                prev_slow_ma=float(prev_slow_ma),
+            )
 
             # Check for crossover signals
             signal = self._generate_signal(

@@ -121,22 +121,40 @@ class MT5Connector:
     def get_account_info(self) -> Optional[dict]:
         """Get account information"""
         try:
+            # Try to get account info directly
             info = mt5.account_info()
             if info is None:
-                logger.error("Failed to get account info")
-                return None
+                # If None, try to check if MT5 is still initialized
+                if not mt5.initialize():
+                    # Try to re-initialize with credentials
+                    if not self.connect():
+                        logger.error("Failed to reconnect to MT5 for account info")
+                        return None
+                    info = mt5.account_info()
+                    if info is None:
+                        logger.error("Account info still None after reconnect")
+                        return None
+                else:
+                    logger.error("Failed to get account info - MT5 initialized but account_info returned None")
+                    return None
+
+            # Calculate margin_used if not available (different MT5 versions)
+            margin_used = getattr(info, 'margin_used', None)
+            if margin_used is None:
+                # Fallback: margin_used = margin_free - free_margin or calculate from balance/equity
+                margin_used = info.balance - info.equity if info.balance >= info.equity else 0
 
             return {
                 "login": info.login,
                 "balance": info.balance,
                 "equity": info.equity,
                 "margin_free": info.margin_free,
-                "margin_used": info.margin_used,
+                "margin_used": margin_used,
                 "leverage": info.leverage,
                 "currency": info.currency,
             }
         except Exception as e:
-            logger.error("Exception getting account info", exception=str(e))
+            logger.error("Exception getting account info", exception=str(e), traceback=True)
             return None
 
     def get_symbol_info(self, symbol: str) -> Optional[dict]:
