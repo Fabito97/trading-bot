@@ -2,7 +2,7 @@
 Trade execution manager with risk management and position tracking.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from config import trading_config
@@ -13,16 +13,15 @@ from mt5_connector import mt5_conn
 
 class TradeExecutor:
     """
-    Executes trades with risk management:
+    Executes trades with risk management for single or multiple pairs:
     - Fixed position sizing
     - Stop loss and take profit
-    - Daily loss limits
-    - Max trades per day limit
+    - Daily loss limits (global across all pairs)
+    - Max trades per day limit (global across all pairs)
     - Trade timeout
     """
 
     def __init__(self):
-        self.symbol = trading_config.symbol
         self.stop_loss_pips = trading_config.stop_loss_pips
         self.take_profit_pips = trading_config.take_profit_pips
         self.max_daily_loss = trading_config.max_daily_loss_percent
@@ -31,28 +30,33 @@ class TradeExecutor:
         self.trade_timeout_minutes = trading_config.trade_timeout_minutes
         self.last_trade_time = None
 
-    def execute_signal(self, signal_type: str, indicator_values: dict) -> bool:
+    def execute_signal(self, signal_type: str, indicator_values: dict, symbol: str = None) -> bool:
         """
         Execute a trading signal with risk management checks.
-        
+
         Args:
             signal_type: 'BUY' or 'SELL'
             indicator_values: Dictionary of indicator values
-            
+            symbol: Trading pair symbol (e.g., 'EURUSD'). If None, uses default symbol.
+
         Returns:
             True if trade executed, False if blocked by risk management
         """
+        # Use provided symbol or default
+        symbol = symbol or trading_config.symbol
+
         # Risk management checks
         if not self._can_trade():
             logger.warning(
                 "Trade blocked by risk management",
                 reason=self._get_trade_block_reason(),
+                symbol=symbol,
             )
             return False
 
         # Get current account and symbol info
         account_info = mt5_conn.get_account_info()
-        symbol_info = mt5_conn.get_symbol_info(self.symbol)
+        symbol_info = mt5_conn.get_symbol_info(symbol)
 
         if not account_info or not symbol_info:
             logger.error("Failed to get account or symbol info")
@@ -80,13 +84,13 @@ class TradeExecutor:
 
         # Send order
         ticket = mt5_conn.send_order(
-            symbol=self.symbol,
+            symbol=symbol,
             order_type=signal_type,
             volume=volume,
             price=entry_price,
             stop_loss=stop_loss,
             take_profit=take_profit,
-            comment=f"TradingBot-{signal_type}",
+            comment=f"TradingBot-{signal_type}-{symbol}",
         )
 
         if ticket is None:
@@ -96,11 +100,11 @@ class TradeExecutor:
         # Store trade in database
         db.add_trade(
             ticket=ticket,
-            symbol=self.symbol,
+            symbol=symbol,
             trade_type=signal_type,
             volume=volume,
             entry_price=entry_price,
-            entry_time=datetime.utcnow(),
+            entry_time=datetime.now(timezone.utc),
             stop_loss=stop_loss,
             take_profit=take_profit,
         )
@@ -108,7 +112,7 @@ class TradeExecutor:
         # Log trade execution
         logger.log_trade(
             trade_type=signal_type,
-            symbol=self.symbol,
+            symbol=symbol,
             volume=volume,
             entry_price=entry_price,
             stop_loss=stop_loss,
@@ -116,7 +120,7 @@ class TradeExecutor:
             ticket=ticket,
         )
 
-        self.last_trade_time = datetime.utcnow()
+        self.last_trade_time = datetime.now(timezone.utc)
         return True
 
     def manage_open_trades(self) -> None:
@@ -134,7 +138,7 @@ class TradeExecutor:
 
                 # Check trade timeout
                 if self.trade_timeout_minutes > 0:
-                    elapsed = (datetime.utcnow() - entry_time).total_seconds() / 60
+                    elapsed = (datetime.now(timezone.utc) - entry_time).total_seconds() / 60
                     if elapsed > self.trade_timeout_minutes:
                         logger.warning(
                             "Trade timeout exceeded",
@@ -145,7 +149,7 @@ class TradeExecutor:
 
                 # Check if position is still open in MT5
                 position = mt5_conn.mt5.positions_get(ticket=ticket) if hasattr(mt5_conn, 'mt5') else None
-                
+
                 if position is None:
                     # Position closed in MT5, need to check profit/loss
                     # This would require fetching closed trades from MT5
@@ -172,7 +176,7 @@ class TradeExecutor:
 
         # Check trade frequency (don't trade too close together)
         if self.last_trade_time:
-            seconds_since_last = (datetime.utcnow() - self.last_trade_time).total_seconds()
+            seconds_since_last = (datetime.now(timezone.utc) - self.last_trade_time).total_seconds()
             if seconds_since_last < 300:  # Min 5 minutes between trades
                 return False
 
@@ -181,7 +185,7 @@ class TradeExecutor:
     def _get_trade_block_reason(self) -> str:
         """Get reason why trade is blocked"""
         daily_stats = db.get_daily_stats()
-        
+
         if daily_stats.get("total_trades", 0) >= self.max_trades_per_day:
             return f"Max trades per day ({self.max_trades_per_day}) reached"
 
@@ -193,7 +197,7 @@ class TradeExecutor:
                 return f"Daily loss limit ({self.max_daily_loss}%) exceeded"
 
         if self.last_trade_time:
-            seconds_since_last = (datetime.utcnow() - self.last_trade_time).total_seconds()
+            seconds_since_last = (datetime.now(timezone.utc) - self.last_trade_time).total_seconds()
             if seconds_since_last < 300:
                 return "Trade frequency limit (5 min minimum between trades)"
 
@@ -202,34 +206,47 @@ class TradeExecutor:
     def _calculate_position_size(self, account_info: dict) -> float:
         """
         Calculate position size based on 1% risk rule.
-        
+
         Args:
             account_info: Account information from MT5
-            
+
         Returns:
             Position size in lots
         """
         balance = account_info.get("balance", 0)
-        
+
         if balance <= 0:
-            return 0
+            return 0.0
 
         # Risk 1% of balance per trade
         risk_amount = balance * 0.01
 
-        # For forex, approximate pip value
-        # In reality, this varies by pair and account currency
-        pip_value = risk_amount / self.stop_loss_pips
+        # For forex, pip value approximation for currency pairs
+        # Assuming account currency is USD and standard forex pip value
+        # For most pairs: 1 pip = $0.0001 * 100,000 units = $10 per standard lot
+        # Therefore: position_size_in_lots = risk_amount / (stop_loss_pips * 10)
+        pip_value_per_lot = 10  # Typical for most forex pairs with USD account
 
-        # Position size: (Risk Amount / Stop Loss Pips) / Pip Value
-        # Standard lot = 100,000 units, mini = 10,000, micro = 1,000
-        position_size = pip_value / 100000
+        # Calculate position size in lots
+        position_size = risk_amount / (self.stop_loss_pips * pip_value_per_lot)
 
-        # Cap at max position size
+        # Cap at max position size (default 0.1 lot)
         position_size = min(position_size, self.max_position_size)
 
-        # Round to valid lot step (0.01 lot minimum)
+        # Round to valid lot step (0.01 lot = 1,000 units minimum for micro lots)
         position_size = round(position_size, 2)
+
+        # Ensure minimum lot size (0.01 = 1,000 units)
+        if position_size < 0.01:
+            position_size = 0.01
+
+        logger.info(
+            "[DEBUG] Position size calculated",
+            balance=balance,
+            risk_amount=risk_amount,
+            stop_loss_pips=self.stop_loss_pips,
+            position_size=position_size,
+        )
 
         return position_size
 

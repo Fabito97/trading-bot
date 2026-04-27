@@ -92,8 +92,12 @@ class TradingBot:
         logger.info("Bot stopped")
 
     def _main_loop(self) -> None:
-        """Main trading loop"""
-        logger.info("Entering main loop")
+        """Main trading loop - supports single or multiple pairs"""
+        logger.info(
+            "Entering main loop",
+            is_multi_pair=trading_config.is_multi_pair,
+            symbols=trading_config.symbols,
+        )
         iteration_count = 0
 
         while self.is_running:
@@ -107,50 +111,68 @@ class TradingBot:
                         logger.error("Reconnection failed, stopping bot")
                         break
 
-                # Get market data
-                bars = mt5_conn.get_rates(
-                    symbol=trading_config.symbol,
-                    timeframe=trading_config.timeframe,
-                    count=trading_config.slow_ma_period + 10,
-                )
+                # Analyze each trading symbol
+                for symbol in trading_config.symbols:
+                    try:
+                        # Get market data for this symbol
+                        bars = mt5_conn.get_rates(
+                            symbol=symbol,
+                            timeframe=trading_config.timeframe,
+                            count=trading_config.slow_ma_period + 10,
+                        )
 
-                if bars is None:
-                    logger.warning("[DEBUG] Failed to get market data, waiting for next cycle", iteration=iteration_count)
-                    time.sleep(trading_config.check_interval_seconds)
-                    continue
+                        if bars is None:
+                            logger.warning(
+                                "[DEBUG] Failed to get market data",
+                                symbol=symbol,
+                                iteration=iteration_count,
+                            )
+                            continue
 
-                # DEBUG: Log bar count and latest prices
-                logger.info(
-                    "[DEBUG] Market data fetched",
-                    iteration=iteration_count,
-                    bar_count=len(bars),
-                    latest_close=float(bars[-1][4]) if len(bars) > 0 else "N/A",
-                    oldest_close=float(bars[0][4]) if len(bars) > 0 else "N/A",
-                )
+                        # DEBUG: Log bar count and latest prices
+                        logger.info(
+                            "[DEBUG] Market data fetched",
+                            symbol=symbol,
+                            iteration=iteration_count,
+                            bar_count=len(bars),
+                            latest_close=float(bars[-1][4]) if len(bars) > 0 else "N/A",
+                        )
 
-                # Analyze with strategy
-                signal_result = strategy.analyze(bars)
+                        # Analyze with strategy for this symbol
+                        signal_result = strategy.analyze(bars, symbol=symbol)
 
-                # DEBUG: Log analysis result
-                if signal_result:
-                    signal_type, indicator_values = signal_result
-                    logger.info(
-                        "[DEBUG] Signal generated",
-                        iteration=iteration_count,
-                        signal_type=signal_type,
-                        fast_ma=indicator_values.get("fast_ma"),
-                        slow_ma=indicator_values.get("slow_ma"),
-                        rsi=indicator_values.get("rsi"),
-                    )
-                    executor.execute_signal(signal_type, indicator_values)
-                    self.total_trades += 1
-                else:
-                    logger.info(
-                        "[DEBUG] No signal generated",
-                        iteration=iteration_count,
-                    )
+                        # DEBUG: Log analysis result
+                        if signal_result:
+                            signal_type, indicator_values = signal_result
+                            logger.info(
+                                "[DEBUG] Signal generated",
+                                symbol=symbol,
+                                iteration=iteration_count,
+                                signal_type=signal_type,
+                                fast_ma=indicator_values.get("fast_ma"),
+                                slow_ma=indicator_values.get("slow_ma"),
+                                rsi=indicator_values.get("rsi"),
+                            )
+                            # Execute signal with symbol parameter
+                            if executor.execute_signal(signal_type, indicator_values, symbol=symbol):
+                                self.total_trades += 1
+                        else:
+                            logger.info(
+                                "[DEBUG] No signal generated",
+                                symbol=symbol,
+                                iteration=iteration_count,
+                            )
 
-                # Manage open trades
+                    except Exception as e:
+                        logger.error(
+                            "Error analyzing symbol",
+                            symbol=symbol,
+                            exception=str(e),
+                            iteration=iteration_count,
+                        )
+                        continue
+
+                # Manage open trades (all pairs)
                 executor.manage_open_trades()
 
                 # Log status periodically

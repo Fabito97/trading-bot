@@ -1,5 +1,5 @@
-import { Card } from "@/components/ui/card";
-import { Empty } from "@/components/ui/empty";
+import { Card } from '@/components/ui/card';
+import { Empty } from '@/components/ui/empty';
 
 interface Signal {
   id: number;
@@ -42,9 +42,9 @@ export default function SignalsSection({ data }: SignalsSectionProps) {
                 <div className="flex items-center gap-3 mb-4">
                   <span
                     className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                      signal.signal_type === "BUY"
-                        ? "bg-green-500/20 text-green-700"
-                        : "bg-red-500/20 text-red-700"
+                      signal.signal_type === 'BUY'
+                        ? 'bg-green-500/20 text-green-700'
+                        : 'bg-red-500/20 text-red-700'
                     }`}
                   >
                     {signal.signal_type}
@@ -61,33 +61,25 @@ export default function SignalsSection({ data }: SignalsSectionProps) {
               <div>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      Fast MA (20):
-                    </span>
+                    <span className="text-sm text-muted-foreground">Fast MA (20):</span>
                     <span className="font-mono text-sm">
                       {signal.fast_ma.toFixed(4)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      Slow MA (50):
-                    </span>
+                    <span className="text-sm text-muted-foreground">Slow MA (50):</span>
                     <span className="font-mono text-sm">
                       {signal.slow_ma.toFixed(4)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      RSI (14):
-                    </span>
+                    <span className="text-sm text-muted-foreground">RSI (14):</span>
                     <span className="font-mono text-sm">
                       {signal.rsi.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">
-                      Close Price:
-                    </span>
+                    <span className="text-sm text-muted-foreground">Close Price:</span>
                     <span className="font-mono text-sm">
                       {signal.candle_close.toFixed(5)}
                     </span>

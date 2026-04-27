@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pandas_ta as ta
 
-from config import trading_config
+from config import trading_config, test_config
 from database import db
 from logger import logger
 from mt5_connector import mt5_conn
@@ -18,27 +18,31 @@ from mt5_connector import mt5_conn
 class TradingStrategy:
     """
     SMA (Simple Moving Average) Crossover strategy with RSI filter.
-    
+    Supports both single and multiple trading pairs.
+
     Entry signals:
     - BUY: Fast MA > Slow MA AND RSI < 70 (not overbought)
     - SELL: Fast MA < Slow MA AND RSI > 30 (not oversold)
     """
 
     def __init__(self):
-        self.symbol = trading_config.symbol
         self.fast_period = trading_config.fast_ma_period
         self.slow_period = trading_config.slow_ma_period
         self.rsi_period = trading_config.rsi_period
         self.rsi_overbought = trading_config.rsi_overbought
         self.rsi_oversold = trading_config.rsi_oversold
+        self.test_mode = test_config.test_mode
+        self.test_signal_interval = test_config.test_signal_interval
+        self.test_cycle_count = 0
 
-    def analyze(self, bars: np.ndarray) -> Optional[Tuple[str, dict]]:
+    def analyze(self, bars: np.ndarray, symbol: str = None) -> Optional[Tuple[str, dict]]:
         """
-        Analyze market data and generate trading signal.
-        
+        Analyze market data and generate trading signal for a specific symbol.
+
         Args:
             bars: Array of OHLC bars from MT5
-            
+            symbol: Trading pair symbol (e.g., 'EURUSD'). If None, uses default symbol.
+
         Returns:
             Tuple of (signal_type, indicator_values) or None if no signal
         """
@@ -74,10 +78,43 @@ class TradingStrategy:
                 prev_slow_ma=float(prev_slow_ma),
             )
 
-            # Check for crossover signals
-            signal = self._generate_signal(
-                fast_ma, slow_ma, prev_fast_ma, prev_slow_ma, rsi, close
-            )
+            # TEST MODE: Generate artificial signals for testing without waiting for real crossovers
+            if self.test_mode != "off":
+                self.test_cycle_count += 1
+                if self.test_cycle_count >= self.test_signal_interval:
+                    self.test_cycle_count = 0  # Reset counter
+
+                    if self.test_mode == "buy":
+                        signal = ("BUY", "TEST MODE: Forced BUY signal")
+                        logger.warning(
+                            "[TEST MODE] Generating forced BUY signal",
+                            symbol=symbol or trading_config.symbol,
+                        )
+                    elif self.test_mode == "sell":
+                        signal = ("SELL", "TEST MODE: Forced SELL signal")
+                        logger.warning(
+                            "[TEST MODE] Generating forced SELL signal",
+                            symbol=symbol or trading_config.symbol,
+                        )
+                    elif self.test_mode == "alternate":
+                        # Alternate between BUY and SELL
+                        if self.test_cycle_count % 2 == 0:
+                            signal = ("BUY", "TEST MODE: Alternating BUY signal")
+                        else:
+                            signal = ("SELL", "TEST MODE: Alternating SELL signal")
+                        logger.warning(
+                            "[TEST MODE] Generating alternating signal",
+                            symbol=symbol or trading_config.symbol,
+                        )
+                    else:
+                        signal = None
+                else:
+                    signal = None
+            else:
+                # Check for crossover signals (normal mode)
+                signal = self._generate_signal(
+                    fast_ma, slow_ma, prev_fast_ma, prev_slow_ma, rsi, close
+                )
 
             if signal:
                 signal_type, reason = signal
@@ -88,8 +125,9 @@ class TradingStrategy:
                     "close": float(close),
                 }
 
-                # Store signal to database
+                # Store signal to database (with symbol support)
                 db.add_signal(
+                    symbol=symbol or trading_config.symbol,
                     signal_type=signal_type,
                     reason=reason,
                     fast_ma=float(fast_ma),
@@ -98,7 +136,16 @@ class TradingStrategy:
                     candle_close=float(close),
                 )
 
-                logger.log_signal(signal_type, reason, indicator_values)
+                if self.test_mode != "off":
+                    logger.warning(
+                        f"[TEST MODE] Signal: {signal_type}",
+                        reason=reason,
+                        indicator_values=indicator_values,
+                        symbol=symbol or trading_config.symbol,
+                    )
+                else:
+                    logger.log_signal(signal_type, reason, indicator_values, symbol=symbol)
+
                 return signal_type, indicator_values
 
             return None

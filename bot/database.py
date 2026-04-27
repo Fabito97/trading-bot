@@ -31,7 +31,7 @@ class TradingDatabase:
         return conn
 
     def _initialize_database(self) -> None:
-        """Create database tables if they don't exist"""
+        """Create database tables if they don't exist and run migrations"""
         with self.lock:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -58,11 +58,12 @@ class TradingDatabase:
                 """
             )
 
-            # Signals table
+            # Signals table - tracks signals per symbol for multi-pair support
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS signals (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol TEXT NOT NULL,
                     signal_type TEXT NOT NULL,
                     reason TEXT NOT NULL,
                     fast_ma REAL,
@@ -73,6 +74,9 @@ class TradingDatabase:
                 )
                 """
             )
+
+            # Run migrations for schema updates
+            # self._run_migrations(cursor)
 
             # Logs table
             cursor.execute(
@@ -117,6 +121,32 @@ class TradingDatabase:
             conn.commit()
             conn.close()
             logger.info("Database initialized successfully")
+
+            # Run migrations after initialization
+            # self._run_migrations_after_init()
+
+    def _run_migrations_after_init(self) -> None:
+        """Run schema migrations for database updates"""
+        with self.lock:
+            try:
+                conn = self._get_connection()
+                cursor = conn.cursor()
+
+                # Migration 1: Add symbol column to signals table if it doesn't exist
+                cursor.execute("PRAGMA table_info(signals)")
+                columns = [row[1] for row in cursor.fetchall()]
+
+                if "symbol" not in columns:
+                    logger.info("Running migration: Adding symbol column to signals table")
+                    cursor.execute(
+                        "ALTER TABLE signals ADD COLUMN symbol TEXT NOT NULL DEFAULT 'EURUSD'"
+                    )
+                    conn.commit()
+                    logger.info("Migration completed: symbol column added to signals table")
+
+                conn.close()
+            except Exception as e:
+                logger.warning("Migration check/execution failed", exception=str(e))
 
     def add_trade(
         self,
@@ -215,6 +245,7 @@ class TradingDatabase:
 
     def add_signal(
         self,
+        symbol: str,
         signal_type: str,
         reason: str,
         fast_ma: float,
@@ -222,7 +253,7 @@ class TradingDatabase:
         rsi: float,
         candle_close: float,
     ) -> None:
-        """Store a trading signal"""
+        """Store a trading signal with symbol tracking for multi-pair support"""
         with self.lock:
             conn = self._get_connection()
             cursor = conn.cursor()
@@ -230,10 +261,10 @@ class TradingDatabase:
             cursor.execute(
                 """
                 INSERT INTO signals
-                (signal_type, reason, fast_ma, slow_ma, rsi, candle_close)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (symbol, signal_type, reason, fast_ma, slow_ma, rsi, candle_close)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (signal_type, reason, fast_ma, slow_ma, rsi, candle_close),
+                (symbol, signal_type, reason, fast_ma, slow_ma, rsi, candle_close),
             )
             conn.commit()
             conn.close()
@@ -284,19 +315,28 @@ class TradingDatabase:
 
             return [dict(row) for row in rows]
 
-    def get_signals(self, limit: int = 50) -> List[Dict[str, Any]]:
-        """Get recent signals"""
+    def get_signals(self, limit: int = 50, symbol: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Get recent signals, optionally filtered by symbol for multi-pair support"""
         with self.lock:
             conn = self._get_connection()
             cursor = conn.cursor()
 
-            cursor.execute(
-                """
-                SELECT * FROM signals
-                ORDER BY created_at DESC LIMIT ?
-                """,
-                (limit,),
-            )
+            if symbol:
+                cursor.execute(
+                    """
+                    SELECT * FROM signals WHERE symbol = ?
+                    ORDER BY created_at DESC LIMIT ?
+                    """,
+                    (symbol, limit),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT * FROM signals
+                    ORDER BY created_at DESC LIMIT ?
+                    """,
+                    (limit,),
+                )
 
             rows = cursor.fetchall()
             conn.close()

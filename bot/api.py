@@ -78,23 +78,35 @@ def get_status():
 
 @app.route("/api/trades", methods=["GET"])
 def get_trades():
-    """Get trades (open and recent closed)"""
+    """Get trades (open and recent closed), optionally filtered by symbol for multi-pair"""
     try:
         limit = request.args.get("limit", default=50, type=int)
+        symbol = request.args.get("symbol")  # Optional: filter by specific symbol
 
         # Get open trades
         open_trades = db.get_open_trades()
 
-        # Get all trades limited
+        # Get all trades limited, optionally filtered by symbol
         conn = db._get_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT * FROM trades
-            ORDER BY entry_time DESC LIMIT ?
-            """,
-            (limit,),
-        )
+
+        if symbol:
+            cursor.execute(
+                """
+                SELECT * FROM trades WHERE symbol = ?
+                ORDER BY entry_time DESC LIMIT ?
+                """,
+                (symbol, limit),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT * FROM trades
+                ORDER BY entry_time DESC LIMIT ?
+                """,
+                (limit,),
+            )
+
         rows = cursor.fetchall()
         conn.close()
 
@@ -102,7 +114,8 @@ def get_trades():
 
         return jsonify({
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "open_count": len(open_trades),
+            "symbol_filter": symbol,
+            "open_count": len([t for t in open_trades if symbol is None or t['symbol'] == symbol]),
             "trades": trades,
         })
 
@@ -131,13 +144,15 @@ def get_trade(ticket: int):
 
 @app.route("/api/signals", methods=["GET"])
 def get_signals():
-    """Get recent trading signals"""
+    """Get recent trading signals, optionally filtered by symbol for multi-pair"""
     try:
         limit = request.args.get("limit", default=50, type=int)
-        signals = db.get_signals(limit)
+        symbol = request.args.get("symbol")  # Optional: filter by specific symbol
+        signals = db.get_signals(limit, symbol=symbol)
 
         return jsonify({
             "timestamp": datetime.now(timezone.utc).isoformat(),
+            "symbol_filter": symbol,
             "count": len(signals),
             "signals": signals,
         })

@@ -1,5 +1,5 @@
-import { Card } from "@/components/ui/card";
-import { Empty } from "@/components/ui/empty";
+import { Card } from '@/components/ui/card';
+import { Empty } from '@/components/ui/empty';
 
 interface Trade {
   id: number;
@@ -39,7 +39,7 @@ export default function TradesSection({ data }: TradesSectionProps) {
   return (
     <div className="space-y-4">
       <div className="text-sm text-muted-foreground">
-        {data.open_count} open trade{data.open_count !== 1 ? "s" : ""}
+        {data.open_count} open trade{data.open_count !== 1 ? 's' : ''}
       </div>
 
       <div className="overflow-x-auto">
@@ -64,9 +64,9 @@ export default function TradesSection({ data }: TradesSectionProps) {
                 <td className="py-3 px-4">
                   <span
                     className={`px-2 py-1 rounded text-xs font-semibold ${
-                      trade.type === "BUY"
-                        ? "bg-green-500/20 text-green-700"
-                        : "bg-red-500/20 text-red-700"
+                      trade.type === 'BUY'
+                        ? 'bg-green-500/20 text-green-700'
+                        : 'bg-red-500/20 text-red-700'
                     }`}
                   >
                     {trade.type}
@@ -79,9 +79,9 @@ export default function TradesSection({ data }: TradesSectionProps) {
                 <td className="py-3 px-4">
                   <span
                     className={`px-2 py-1 rounded text-xs font-semibold ${
-                      trade.status === "OPEN"
-                        ? "bg-blue-500/20 text-blue-700"
-                        : "bg-gray-500/20 text-gray-700"
+                      trade.status === 'OPEN'
+                        ? 'bg-blue-500/20 text-blue-700'
+                        : 'bg-gray-500/20 text-gray-700'
                     }`}
                   >
                     {trade.status}
@@ -92,11 +92,11 @@ export default function TradesSection({ data }: TradesSectionProps) {
                     <span
                       className={
                         trade.pnl >= 0
-                          ? "text-green-600 font-semibold"
-                          : "text-red-600 font-semibold"
+                          ? 'text-green-600 font-semibold'
+                          : 'text-red-600 font-semibold'
                       }
                     >
-                      {trade.pnl >= 0 ? "+" : "-"}
+                      {trade.pnl >= 0 ? '+' : '-'}
                       {Math.abs(trade.pnl).toFixed(2)}
                     </span>
                   )}

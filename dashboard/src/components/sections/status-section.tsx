@@ -1,5 +1,5 @@
-import { Card } from "@/components/ui/card";
-import { Spinner } from "@/components/ui/spinner";
+import { Card } from '@/components/ui/card';
+import { Spinner } from '@/components/ui/spinner';
 
 interface StatusData {
   timestamp: string;
@@ -26,7 +26,6 @@ interface StatusData {
     winning_trades: number;
     closing_trades: number;
     average_pnl: number;
-    daily_pnl: number;
   };
 }
 
@@ -61,8 +60,8 @@ export default function StatusSection({
   }
 
   const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-US", {
-      style: "currency",
+    new Intl.NumberFormat('en-US', {
+      style: 'currency',
       currency: data.account.currency,
     }).format(value);
 
@@ -81,11 +80,11 @@ export default function StatusSection({
             <div className="flex items-center gap-2 mt-2">
               <div
                 className={`w-3 h-3 rounded-full ${
-                  data.mt5_connected ? "bg-green-500" : "bg-red-500"
+                  data.mt5_connected ? 'bg-green-500' : 'bg-red-500'
                 }`}
               />
               <span className="font-semibold">
-                {data.mt5_connected ? "Connected" : "Disconnected"}
+                {data.mt5_connected ? 'Connected' : 'Disconnected'}
               </span>
             </div>
           </div>
@@ -95,11 +94,11 @@ export default function StatusSection({
             <div className="flex items-center gap-2 mt-2">
               <div
                 className={`w-3 h-3 rounded-full ${
-                  data.bot.is_running ? "bg-green-500" : "bg-yellow-500"
+                  data.bot.is_running ? 'bg-green-500' : 'bg-yellow-500'
                 }`}
               />
               <span className="font-semibold">
-                {data.bot.is_running ? "Running" : "Stopped"}
+                {data.bot.is_running ? 'Running' : 'Stopped'}
               </span>
             </div>
           </div>
@@ -114,9 +113,7 @@ export default function StatusSection({
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
               <div>
                 <p className="text-sm text-muted-foreground">Login</p>
-                <p className="text-lg font-semibold mt-1">
-                  {data.account.login}
-                </p>
+                <p className="text-lg font-semibold mt-1">{data.account.login}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Balance</p>
@@ -144,30 +141,22 @@ export default function StatusSection({
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Leverage</p>
-                <p className="text-lg font-semibold mt-1">
-                  1:{data.account.leverage}
-                </p>
+                <p className="text-lg font-semibold mt-1">1:{data.account.leverage}</p>
               </div>
             </div>
           </Card>
 
           {/* Trading Statistics */}
           <Card className="p-6">
-            <h3 className="text-lg font-semibold mb-4">
-              Today&apos;s Statistics
-            </h3>
+            <h3 className="text-lg font-semibold mb-4">Today&apos;s Statistics</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
               <div>
                 <p className="text-sm text-muted-foreground">Total Trades</p>
-                <p className="text-2xl font-bold mt-1">
-                  {data.trading.daily_trades}
-                </p>
+                <p className="text-2xl font-bold mt-1">{data.trading.daily_trades}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Open Trades</p>
-                <p className="text-2xl font-bold mt-1">
-                  {data.trading.open_trades}
-                </p>
+                <p className="text-2xl font-bold mt-1">{data.trading.open_trades}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Winning Trades</p>
@@ -179,12 +168,12 @@ export default function StatusSection({
                 <p className="text-sm text-muted-foreground">Daily P&L</p>
                 <p
                   className={`text-2xl font-bold mt-1 ${
-                    data.trading.daily_pnl >= 0
-                      ? "text-green-600"
-                      : "text-red-600"
+                    data.bot.daily_pnl >= 0
+                      ? 'text-green-600'
+                      : 'text-red-600'
                   }`}
                 >
-                  {formatPnL(data.trading.daily_pnl)}
+                  {formatPnL(data.bot.daily_pnl)}
                 </p>
               </div>
             </div>
@@ -196,15 +185,13 @@ export default function StatusSection({
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
               <div>
                 <p className="text-sm text-muted-foreground">Total Trades</p>
-                <p className="text-lg font-semibold mt-1">
-                  {data.bot.total_trades}
-                </p>
+                <p className="text-lg font-semibold mt-1">{data.bot.total_trades}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total P&L</p>
                 <p
                   className={`text-lg font-semibold mt-1 ${
-                    data.bot.total_pnl >= 0 ? "text-green-600" : "text-red-600"
+                    data.bot.total_pnl >= 0 ? 'text-green-600' : 'text-red-600'
                   }`}
                 >
                   {formatPnL(data.bot.total_pnl)}

@@ -1,5 +1,5 @@
-import { Card } from "@/components/ui/card";
-import { Empty } from "@/components/ui/empty";
+import { Card } from '@/components/ui/card';
+import { Empty } from '@/components/ui/empty';
 
 interface Log {
   id: number;
@@ -31,16 +31,16 @@ export default function LogsSection({ data }: LogsSectionProps) {
 
   const getLevelColor = (level: string) => {
     switch (level) {
-      case "INFO":
-        return "bg-blue-500/20 text-blue-700";
-      case "WARNING":
-        return "bg-yellow-500/20 text-yellow-700";
-      case "ERROR":
-        return "bg-red-500/20 text-red-700";
-      case "DEBUG":
-        return "bg-gray-500/20 text-gray-700";
+      case 'INFO':
+        return 'bg-blue-500/20 text-blue-700';
+      case 'WARNING':
+        return 'bg-yellow-500/20 text-yellow-700';
+      case 'ERROR':
+        return 'bg-red-500/20 text-red-700';
+      case 'DEBUG':
+        return 'bg-gray-500/20 text-gray-700';
       default:
-        return "bg-gray-500/20 text-gray-700";
+        return 'bg-gray-500/20 text-gray-700';
     }
   };
 
@@ -65,9 +65,7 @@ export default function LogsSection({ data }: LogsSectionProps) {
             <div className="flex gap-4">
               {/* Level Badge */}
               <div>
-                <span
-                  className={`px-2 py-1 rounded text-xs font-semibold ${getLevelColor(log.level)}`}
-                >
+                <span className={`px-2 py-1 rounded text-xs font-semibold ${getLevelColor(log.level)}`}>
                   {log.level}
                 </span>
               </div>
@@ -81,14 +79,12 @@ export default function LogsSection({ data }: LogsSectionProps) {
                         {log.event}
                       </p>
                     )}
-                    <p className="text-sm wrap-break-words">{log.message}</p>
+                    <p className="text-sm break-words">{log.message}</p>
 
                     {log.data && (
                       <div className="mt-2 bg-muted p-2 rounded text-xs font-mono overflow-x-auto">
-                        {typeof parseLogData(log.data) === "object" ? (
-                          <pre>
-                            {JSON.stringify(parseLogData(log.data), null, 2)}
-                          </pre>
+                        {typeof parseLogData(log.data) === 'object' ? (
+                          <pre>{JSON.stringify(parseLogData(log.data), null, 2)}</pre>
                         ) : (
                           <pre>{log.data}</pre>
                         )}

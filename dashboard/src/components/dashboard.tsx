@@ -1,52 +1,50 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import useSWR from "swr";
-import { Card } from "@/components/ui/card";
-import StatusSection from "./sections/status-section";
-import TradesSection from "./sections/trades-section";
-import SignalsSection from "./sections/signals-section";
-import LogsSection from "./sections/logs-section";
-import { useAPIConnection } from "@/hooks/use-api-connection";
+import { useEffect, useState } from 'react';
+import useSWR from 'swr';
+import { Card } from '@/components/ui/card';
+import StatusSection from './sections/status-section';
+import TradesSection from './sections/trades-section';
+import SignalsSection from './sections/signals-section';
+import LogsSection from './sections/logs-section';
+import { useAPIConnection } from '@/hooks/use-api-connection';
 
 const fetcher = async (url: string) => {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   const response = await fetch(`${apiUrl}${url}`, {
-    mode: "cors",
-    credentials: "omit",
+    mode: 'cors',
+    credentials: 'omit',
   });
-  if (!response.ok) throw new Error("API error");
+  if (!response.ok) throw new Error('API error');
   return response.json();
 };
 
 export default function Dashboard() {
   const { connected } = useAPIConnection();
-  const [activeTab, setActiveTab] = useState("status");
+  const [activeTab, setActiveTab] = useState('status');
 
-  const {
-    data: statusData,
-    error: statusError,
-    isLoading: statusLoading,
-  } = useSWR(connected ? "/api/status" : null, fetcher, {
-    refreshInterval: 5000,
-  });
+  const { data: statusData, error: statusError, isLoading: statusLoading } = useSWR(
+    connected ? '/api/status' : null,
+    fetcher,
+    { refreshInterval: 5000 }
+  );
 
   const { data: tradesData } = useSWR(
-    connected && activeTab === "trades" ? "/api/trades" : null,
+    connected && activeTab === 'trades' ? '/api/trades' : null,
     fetcher,
-    { refreshInterval: 10000 },
+    { refreshInterval: 10000 }
   );
 
   const { data: signalsData } = useSWR(
-    connected && activeTab === "signals" ? "/api/signals" : null,
+    connected && activeTab === 'signals' ? '/api/signals' : null,
     fetcher,
-    { refreshInterval: 10000 },
+    { refreshInterval: 10000 }
   );
 
   const { data: logsData } = useSWR(
-    connected && activeTab === "logs" ? "/api/logs" : null,
+    connected && activeTab === 'logs' ? '/api/logs' : null,
     fetcher,
-    { refreshInterval: 10000 },
+    { refreshInterval: 10000 }
   );
 
   if (!connected) {
@@ -83,30 +81,29 @@ export default function Dashboard() {
         {statusError && (
           <Card className="bg-destructive/10 border-destructive mb-6">
             <div className="p-4">
-              <p className="text-destructive font-semibold">
-                Error loading status
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Check bot connection
-              </p>
+              <p className="text-destructive font-semibold">Error loading status</p>
+              <p className="text-sm text-muted-foreground">Check bot connection</p>
             </div>
           </Card>
         )}
 
         {/* Status Section - Always Visible */}
-        <StatusSection data={statusData} isLoading={statusLoading} />
+        <StatusSection
+          data={statusData}
+          isLoading={statusLoading}
+        />
 
         {/* Tabs */}
         <div className="mt-8 border-b">
           <div className="flex gap-8">
-            {["status", "trades", "signals", "logs"].map((tab) => (
+            {['status', 'trades', 'signals', 'logs'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`py-3 px-1 border-b-2 font-medium transition-colors ${
                   activeTab === tab
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground"
+                    ? 'border-primary text-primary'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -117,7 +114,7 @@ export default function Dashboard() {
 
         {/* Tab Content */}
         <div className="mt-8">
-          {activeTab === "status" && (
+          {activeTab === 'status' && (
             <div className="space-y-6">
               <StatusSection
                 data={statusData}
@@ -127,11 +124,17 @@ export default function Dashboard() {
             </div>
           )}
 
-          {activeTab === "trades" && <TradesSection data={tradesData} />}
+          {activeTab === 'trades' && (
+            <TradesSection data={tradesData} />
+          )}
 
-          {activeTab === "signals" && <SignalsSection data={signalsData} />}
+          {activeTab === 'signals' && (
+            <SignalsSection data={signalsData} />
+          )}
 
-          {activeTab === "logs" && <LogsSection data={logsData} />}
+          {activeTab === 'logs' && (
+            <LogsSection data={logsData} />
+          )}
         </div>
       </div>
     </div>
