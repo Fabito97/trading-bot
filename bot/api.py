@@ -65,6 +65,7 @@ def get_status():
                 "daily_trades": daily_stats.get("total_trades", 0),
                 "winning_trades": daily_stats.get("winning_trades", 0),
                 "closing_trades": daily_stats.get("closed_trades", 0),
+                "daily_pnl": daily_stats.get("daily_pnl", 0),
                 "average_pnl": daily_stats.get("avg_pnl", 0),
             },
         }

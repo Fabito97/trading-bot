@@ -61,10 +61,15 @@ class MT5Connector:
 
             self.is_connected = True
             self.reconnect_attempts = 0
+            
+            # Get broker info for Exness
+            account_info = mt5.account_info()
             logger.info(
-                "Connected to MT5",
+                "Connected to MT5 (Exness)",
                 login=mt5_config.login,
                 server=mt5_config.server,
+                broker=account_info.company if account_info else "Unknown",
+                leverage=account_info.leverage if account_info else "Unknown",
             )
             return True
 
@@ -158,13 +163,17 @@ class MT5Connector:
             return None
 
     def get_symbol_info(self, symbol: str) -> Optional[dict]:
-        """Get symbol/instrument information"""
+        """Get symbol/instrument information including stops level"""
         try:
             info = mt5.symbol_info(symbol)
             if info is None:
                 logger.error("Symbol not found", symbol=symbol)
                 return None
 
+            # Get trade spread and other requirements
+            trade_tick_size = getattr(info, 'trade_tick_size', info.point)
+            trade_stops_level = getattr(info, 'trade_stops_level', 0)
+            
             return {
                 "symbol": info.name,
                 "bid": info.bid,
@@ -175,6 +184,8 @@ class MT5Connector:
                 "min_volume": info.volume_min,
                 "max_volume": info.volume_max,
                 "volume_step": info.volume_step,
+                "trade_stops_level": trade_stops_level,  # Minimum distance for SL/TP in points
+                "trade_tick_size": trade_tick_size,  # Minimum price change
             }
         except Exception as e:
             logger.error("Exception getting symbol info", symbol=symbol, exception=str(e))
@@ -229,6 +240,80 @@ class MT5Connector:
         }
         return timeframe_map.get(minutes)
 
+    def get_available_symbols(self, prefix: str = "") -> list:
+        """
+        Get list of available symbols on Exness (useful for debugging).
+
+        Args:
+            prefix: Optional prefix to filter (e.g., "EUR" for EUR pairs)
+
+        Returns:
+            List of available symbol names
+        """
+        try:
+            # Get all symbols (this includes symbols not in Market Watch)
+            symbols = mt5.symbols_get()
+            if symbols is None:
+                return []
+
+            available = [s.name for s in symbols if s.visible]
+            if prefix:
+                available = [s for s in available if s.startswith(prefix.upper())]
+
+            return sorted(available)
+        except Exception as e:
+            logger.error("Error getting available symbols", exception=str(e))
+            return []
+
+    def validate_symbol_for_exness(self, symbol: str) -> bool:
+        """
+        Validate if symbol is available and enabled on Exness.
+
+        NOTE: Symbol must be in MT5 Market Watch to be recognized.
+        If symbol not found:
+        1. Open MT5 terminal
+        2. Go to View → Market Watch
+        3. Right-click → Symbols
+        4. Search for symbol and check to add it
+
+        Args:
+            symbol: Trading symbol to validate
+
+        Returns:
+            True if symbol is valid and enabled, False otherwise
+        """
+        try:
+            symbol_info = mt5.symbol_info(symbol)
+            if symbol_info is None:
+                logger.warning(
+                    "Symbol not found in Market Watch",
+                    symbol=symbol,
+                    hint="Add symbol to MT5 Market Watch: View → Market Watch → Symbols",
+                )
+
+                # Try to find similar symbols for helpful debugging
+                base = symbol[:3]  # Get first 3 chars (e.g., "EUR" from "EURUSD")
+                available = self.get_available_symbols(base)
+                if available:
+                    logger.info(
+                        "Available symbols with same base",
+                        base=base,
+                        symbols=available[:5],  # Show first 5
+                    )
+
+                return False
+
+            # Check if symbol is enabled for trading
+            if not symbol_info.visible:
+                logger.warning("Symbol disabled on Exness (not in Market Watch)", symbol=symbol)
+                return False
+            
+            logger.debug("Symbol validated for Exness", symbol=symbol)
+            return True
+        except Exception as e:
+            logger.error("Symbol validation error", symbol=symbol, exception=str(e))
+            return False
+
     def send_order(
         self,
         symbol: str,
@@ -240,7 +325,7 @@ class MT5Connector:
         comment: str = "TradingBot",
     ) -> Optional[int]:
         """
-        Send a market order to MT5.
+        Send a market order to MT5 (Exness optimized).
         
         Args:
             symbol: Trading symbol
@@ -256,6 +341,8 @@ class MT5Connector:
         """
         try:
             # Prepare order request
+            # Note: type_filling removed - some brokers don't support explicit filling modes
+            # MT5 will use the default filling mode for the symbol
             request = {
                 "action": mt5.TRADE_ACTION_DEAL,
                 "symbol": symbol,
@@ -267,8 +354,6 @@ class MT5Connector:
                 "deviation": 20,  # Max deviation in points
                 "magic": 12345,
                 "comment": comment,
-                "type_filling": mt5.ORDER_FILLING_IOC,
-                "type_time": mt5.ORDER_TIME_GTC,
             }
 
             # Send order

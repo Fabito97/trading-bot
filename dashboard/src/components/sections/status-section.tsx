@@ -25,6 +25,7 @@ interface StatusData {
     daily_trades: number;
     winning_trades: number;
     closing_trades: number;
+    daily_pnl: number;
     average_pnl: number;
   };
 }

@@ -56,6 +56,21 @@ class TradingBot:
             logger.error("Failed to connect to MT5, exiting")
             return
 
+        # Validate all configured symbols for Exness
+        logger.info("Validating trading symbols for Exness...")
+        invalid_symbols = []
+        for symbol in trading_config.symbols:
+            if not mt5_conn.validate_symbol_for_exness(symbol):
+                invalid_symbols.append(symbol)
+        
+        if invalid_symbols:
+            logger.error("Invalid symbols for Exness", invalid_symbols=invalid_symbols)
+            logger.info("Available symbols can be found in Exness Market Watch window")
+            mt5_conn.disconnect()
+            return
+        
+        logger.info("All symbols validated successfully for Exness", symbols=trading_config.symbols)
+
         self.is_running = True
         db.update_bot_state(
             is_running=True,
@@ -103,7 +118,7 @@ class TradingBot:
         while self.is_running:
             try:
                 iteration_count += 1
-
+                
                 # Health check
                 if not mt5_conn.is_ready():
                     logger.warning("MT5 connection lost, attempting reconnect")

@@ -33,18 +33,18 @@ class TradeExecutor:
     def execute_signal(self, signal_type: str, indicator_values: dict, symbol: str = None) -> bool:
         """
         Execute a trading signal with risk management checks.
-
+        
         Args:
             signal_type: 'BUY' or 'SELL'
             indicator_values: Dictionary of indicator values
             symbol: Trading pair symbol (e.g., 'EURUSD'). If None, uses default symbol.
-
+            
         Returns:
             True if trade executed, False if blocked by risk management
         """
         # Use provided symbol or default
         symbol = symbol or trading_config.symbol
-
+        
         # Risk management checks
         if not self._can_trade():
             logger.warning(
@@ -72,15 +72,58 @@ class TradeExecutor:
         bid = symbol_info["bid"]
         ask = symbol_info["ask"]
         point = symbol_info["point"]
+        digits = symbol_info.get("digits", 4)
+        min_stops = symbol_info.get("trade_stops_level", 0)  # Minimum distance in points
+        tick_size = symbol_info.get("trade_tick_size", point)
 
         if signal_type == "BUY":
             entry_price = ask
+            # Calculate SL/TP with proper distance
             stop_loss = entry_price - (self.stop_loss_pips * point)
             take_profit = entry_price + (self.take_profit_pips * point)
+            
+            # Add safety buffer (minimum 2 points extra) to avoid "Invalid stops"
+            safety_buffer = 2 * point
+            
+            # Ensure minimum distance from entry price (at least 3 points)
+            min_distance_required = max(3 * point, (min_stops + 1) * point if min_stops > 0 else 3 * point)
+            if entry_price - stop_loss < min_distance_required:
+                stop_loss = entry_price - min_distance_required - safety_buffer
+            if take_profit - entry_price < min_distance_required:
+                take_profit = entry_price + min_distance_required + safety_buffer
         else:  # SELL
             entry_price = bid
+            # Calculate SL/TP with proper distance
             stop_loss = entry_price + (self.stop_loss_pips * point)
             take_profit = entry_price - (self.take_profit_pips * point)
+            
+            # Add safety buffer (minimum 2 points extra) to avoid "Invalid stops"
+            safety_buffer = 2 * point
+            
+            # Ensure minimum distance from entry price (at least 3 points)
+            min_distance_required = max(3 * point, (min_stops + 1) * point if min_stops > 0 else 3 * point)
+            if stop_loss - entry_price < min_distance_required:
+                stop_loss = entry_price + min_distance_required + safety_buffer
+            if entry_price - take_profit < min_distance_required:
+                take_profit = entry_price - min_distance_required - safety_buffer
+        
+        # Round to proper decimal places for the pair
+        stop_loss = round(stop_loss, digits)
+        take_profit = round(take_profit, digits)
+        entry_price = round(entry_price, digits)
+        
+        # Debug log SL/TP calculation
+        logger.info(
+            "[DEBUG] Stop Loss / Take Profit calculation",
+            symbol=symbol,
+            entry_price=entry_price,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
+            point=point,
+            digits=digits,
+            min_stops=min_stops,
+            tick_size=tick_size,
+        )
 
         # Send order
         ticket = mt5_conn.send_order(
@@ -149,7 +192,7 @@ class TradeExecutor:
 
                 # Check if position is still open in MT5
                 position = mt5_conn.mt5.positions_get(ticket=ticket) if hasattr(mt5_conn, 'mt5') else None
-
+                
                 if position is None:
                     # Position closed in MT5, need to check profit/loss
                     # This would require fetching closed trades from MT5
@@ -185,7 +228,7 @@ class TradeExecutor:
     def _get_trade_block_reason(self) -> str:
         """Get reason why trade is blocked"""
         daily_stats = db.get_daily_stats()
-
+        
         if daily_stats.get("total_trades", 0) >= self.max_trades_per_day:
             return f"Max trades per day ({self.max_trades_per_day}) reached"
 
@@ -205,43 +248,49 @@ class TradeExecutor:
 
     def _calculate_position_size(self, account_info: dict) -> float:
         """
-        Calculate position size based on 1% risk rule.
-
+        Calculate position size based on 1% risk rule - Exness optimized.
+        
+        Exness supports:
+        - Micro lots (0.01): 1,000 units
+        - Mini lots (0.1): 10,000 units  
+        - Standard lots (1.0): 100,000 units
+        - Leverage: up to 1:2000 on demo accounts
+        
         Args:
             account_info: Account information from MT5
-
+            
         Returns:
             Position size in lots
         """
         balance = account_info.get("balance", 0)
-
+        
         if balance <= 0:
             return 0.0
 
-        # Risk 1% of balance per trade
+        # Risk 1% of balance per trade (conservative for Exness demo)
         risk_amount = balance * 0.01
 
-        # For forex, pip value approximation for currency pairs
-        # Assuming account currency is USD and standard forex pip value
-        # For most pairs: 1 pip = $0.0001 * 100,000 units = $10 per standard lot
+        # For forex with Exness (USD account typical):
+        # 1 pip movement on standard lot (100,000 units) = $10
         # Therefore: position_size_in_lots = risk_amount / (stop_loss_pips * 10)
-        pip_value_per_lot = 10  # Typical for most forex pairs with USD account
-
+        # This calculation is broker-agnostic and works for Exness
+        pip_value_per_lot = 10  # Standard forex pip value
+        
         # Calculate position size in lots
         position_size = risk_amount / (self.stop_loss_pips * pip_value_per_lot)
 
-        # Cap at max position size (default 0.1 lot)
+        # Cap at max position size (Exness allows up to 0.5 for micro account demo)
         position_size = min(position_size, self.max_position_size)
 
-        # Round to valid lot step (0.01 lot = 1,000 units minimum for micro lots)
+        # Round to valid Exness lot step (0.01 = 1,000 micro units minimum)
         position_size = round(position_size, 2)
-
-        # Ensure minimum lot size (0.01 = 1,000 units)
+        
+        # Ensure minimum lot size (0.01 micro lot = 1,000 units)
         if position_size < 0.01:
             position_size = 0.01
 
         logger.info(
-            "[DEBUG] Position size calculated",
+            "[DEBUG] Position size calculated (Exness optimized)",
             balance=balance,
             risk_amount=risk_amount,
             stop_loss_pips=self.stop_loss_pips,
